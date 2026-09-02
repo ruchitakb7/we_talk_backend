@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1788020984287,
+      "tag": "0000_perfect_rogue",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788029831744,
+      "tag": "0001_solid_riptide",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788092753466,
+      "tag": "0002_ambiguous_taskmaster",
+      "breakpoints": true
+    }
+  ]
+}
