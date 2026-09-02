@@ -12,6 +12,8 @@ export const setAuthCookie = (res: Response, userId: string) => {
     }
   );
 
+  console
+
   res.cookie("accessToken", token, {
     httpOnly: true,
     secure: true,
