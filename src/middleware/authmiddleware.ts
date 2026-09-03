@@ -29,12 +29,18 @@ export const authMiddleware = async (
 
 
         const u = await db
-            .select()
+            .select({
+                id: users.id,
+                email: users.email,
+                username: users.username,
+                fullName: users.fullName,
+                profileimg: users.profileimg,
+            })
             .from(users)
             .where(eq(users.id, decoded.userId))
             .limit(1);
 
-            const user = u[0];
+        const { ...user } = u[0];
 
         if (!user) {
             return res.status(401).json({

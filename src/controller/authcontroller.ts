@@ -31,12 +31,12 @@ export const googleCallback = (
 export const signup = async (req: Request, res: Response) => {
   try {
     // 1. Get data from request body
-    const { email, password } = req.body;
+    const { fullName,email, password } = req.body;
 
     // 2. Validate input
-    if (!email || !password) {
+    if (!email || !password || !fullName) {
       return res.status(400).json({
-        message: "Email and password are required",
+        message: "Email, password, and full name are required",
       });
     }
 
@@ -61,11 +61,13 @@ export const signup = async (req: Request, res: Response) => {
       .values({
         email,
         password: hashedPassword,
+        fullName,
       })
       .returning({
         id: users.id,
         email: users.email,
         username: users.username,
+        fullName: users.fullName,
         createdAt: users.createdAt,
       });
 
@@ -234,12 +236,14 @@ export const updateUserProfile = async (
       username,
       password,
       profileimg,
+      fullName,
     } = req.body;
 
     const updateData: {
       username?: string;
       password?: string;
       profileimg?: string | null;
+      fullName?: string;
     } = {};
 
     // Username
@@ -281,6 +285,16 @@ export const updateUserProfile = async (
       updateData.profileimg = profileimg;
     }
 
+    if (fullName !== undefined) {
+      const trimmedFullName = String(fullName).trim();
+      if (!trimmedFullName) {
+        return res.status(400).json({
+          message: "Full name cannot be empty",
+        });
+      }
+      updateData.fullName = trimmedFullName;
+    }
+
     // Nothing to update
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({
@@ -295,6 +309,7 @@ export const updateUserProfile = async (
       .returning({
         id: users.id,
         username: users.username,
+        fullName: users.fullName,
         email: users.email,
         profileimg: users.profileimg,
       });
@@ -321,6 +336,31 @@ export const updateUserProfile = async (
 
     return res.status(500).json({
       message: "Unable to update profile",
+    });
+  }
+};
+
+
+
+export const logout = async (req: Request, res: Response) => {
+  try {
+    res.clearCookie("accessToken", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      path: "/",
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Logout successful",
+    });
+  } catch (error) {
+    console.error("Logout error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Logout failed",
     });
   }
 };

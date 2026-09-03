@@ -1,9 +1,12 @@
 import { Router } from "express";
-import { signup, googleCallback, login,updateUserProfile, authMe, checkUsernameAvailability} from "./../controller/authcontroller";
+import { signup, googleCallback, login,updateUserProfile, authMe, logout,
+  checkUsernameAvailability} from "./../controller/authcontroller";
 import { authMiddleware } from "../middleware/authmiddleware";
 import passport from "../config/passport";
 
 const router = Router();
+
+router.post("/logout", logout);
 
 router.post("/signup", signup);
 
@@ -11,33 +14,16 @@ router.post("/login", login);
 
 router.get("/me", authMiddleware, authMe);
 
-router.get(
-  "/google",
-  passport.authenticate("google", {
-    scope: ["profile", "email"],
-  })
-);
+router.get("/google",passport.authenticate("google", {scope: ["profile", "email"],}));
 
-router.get(
-  "/google/callback",
-  passport.authenticate("google", {
-    session: false,
-  }),
-  googleCallback
-);
+router.get("/google/callback",passport.authenticate("google", {session: false,}),googleCallback);
 
 
-router.get(
-  "/username/check",
-  authMiddleware,
-  checkUsernameAvailability
-);
+router.get("/username/check",authMiddleware,checkUsernameAvailability);
 
 
-router.patch(
-  "/profile",
-  authMiddleware,
-  updateUserProfile
-);
+router.patch("/profile",authMiddleware,updateUserProfile);
+
+
 
 export default router;
