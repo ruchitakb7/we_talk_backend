@@ -3,6 +3,7 @@ import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { db } from "../db/postgresconfig";
 import { users } from "../model/users";
 import { eq } from "drizzle-orm";
+import { generateUsername } from "../utils/generateUsername";
 
 passport.use(
   new GoogleStrategy(
@@ -16,12 +17,13 @@ passport.use(
       try {
         const email = profile.emails?.[0]?.value;
         const googleId = profile.id;
+        const username = generateUsername(email || "");
 
         if (!email) {
           return done(new Error("Google account does not have an email"));
         }
 
-        // Check whether this Google account already exists
+       
         const existingUser = await db
           .select()
           .from(users)
@@ -31,26 +33,25 @@ passport.use(
           return done(null, existingUser[0]);
         }
 
-        // Check whether the email already belongs to a user
+      
         const existingEmailUser = await db
           .select()
           .from(users)
           .where(eq(users.email, email));
 
         if (existingEmailUser.length > 0) {
-          // We'll handle account linking properly later
           return done(
             new Error("An account with this email already exists")
           );
         }
 
-        // Create new Google user
         const [newUser] = await db
           .insert(users)
           .values({
             email,
             googleId,
             password: null,
+            username,
           })
           .returning();
 

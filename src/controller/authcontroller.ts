@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import "dotenv/config";
 import { db } from "../db/postgresconfig";
 import { users } from "./../model/users";
-
+import { generateUsername } from "../utils/generateUsername";
 import { setAuthCookie } from "../utils/jsonwebtoken";
 
 export const googleCallback = (
@@ -30,17 +30,15 @@ export const googleCallback = (
 
 export const signup = async (req: Request, res: Response) => {
   try {
-    // 1. Get data from request body
+   
     const { fullName,email, password } = req.body;
 
-    // 2. Validate input
     if (!email || !password || !fullName) {
       return res.status(400).json({
         message: "Email, password, and full name are required",
       });
     }
 
-    // 3. Check whether user already exists
     const existingUser = await db
       .select()
       .from(users)
@@ -52,16 +50,17 @@ export const signup = async (req: Request, res: Response) => {
       });
     }
 
-    // 4. Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 5. Create the user
+     const username = generateUsername(email);
+
     const [newUser] = await db
       .insert(users)
       .values({
         email,
         password: hashedPassword,
         fullName,
+        username,
       })
       .returning({
         id: users.id,
