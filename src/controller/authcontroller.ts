@@ -201,7 +201,9 @@ export const checkUsernameAvailability = async (
     }
 
     
-    if (existingUser[0].id === req.user?.id) {
+    const matchedUser = existingUser[0];
+
+    if (matchedUser && matchedUser.id === req.user?.id) {
       return res.json({
         available: true,
       });
@@ -229,6 +231,12 @@ export const updateUserProfile = async (
 ) => {
   try {
     const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        message: "Authentication required",
+      });
+    }
 
     const {
       username,
@@ -377,7 +385,13 @@ export const searchUsers = async (req: Request, res: Response) => {
 
     const searchTerm = q.trim();
 
-    const currentUserId = req.user.id;
+    const currentUserId = req.user?.id;
+
+    if (!currentUserId) {
+      return res.status(401).json({
+        message: "Authentication required",
+      });
+    }
 
     const results = await db
       .select({
@@ -407,4 +421,18 @@ export const searchUsers = async (req: Request, res: Response) => {
       message: "Internal server error",
     });
   }
+};
+
+
+
+
+export const updateLastSeen = async (userId: string) => {
+  const last_seen = new Date();
+  await db
+    .update(users)
+    .set({
+      last_seen: last_seen,
+    })
+    .where(eq(users.id, userId));
+    return last_seen;
 };

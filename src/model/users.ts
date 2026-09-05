@@ -39,4 +39,6 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at")
     .defaultNow()
     .notNull(),
+
+  last_seen: timestamp("last_seen"),
 });

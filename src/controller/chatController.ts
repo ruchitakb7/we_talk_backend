@@ -166,6 +166,12 @@ export const createGroupChat = async (
         // Logged-in user
         const currentUserId = req.user?.id;
 
+        if (!currentUserId) {
+            return res.status(401).json({
+                message: "Authentication required",
+            });
+        }
+
         // Group details
         const { groupName, memberUsernames } = req.body;
 
@@ -299,7 +305,6 @@ export const getUserChats = async (
         name: chats.name,
         createdAt: chats.createdAt,
         updatedAt: chats.updatedAt,
-
         userId: users.id,
         username: users.username,
         fullName: users.fullName,
@@ -333,7 +338,7 @@ export const getUserChats = async (
     //   name: chat.name,
       createdAt: chat.createdAt,
       updatedAt: chat.updatedAt,
-
+      
       name: chat.type === "private" ? chat.fullName || chat.username : chat.name,
     }));
 
@@ -347,4 +352,16 @@ export const getUserChats = async (
       message: "Internal server error",
     });
   }
+};
+
+export const getLastSeen = async (userId: string) => {
+  const result = await db
+    .select({
+      last_seen: users.last_seen,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  return result[0]?.last_seen ?? null;
 };
