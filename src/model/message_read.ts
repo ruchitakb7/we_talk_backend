@@ -4,6 +4,7 @@ import {
   integer,
   timestamp,
   unique,
+  uuid,
 } from "drizzle-orm/pg-core";
 
 import { messages } from "./message";
@@ -20,7 +21,7 @@ export const messageReads = pgTable(
         onDelete: "cascade",
       }),
 
-    userId: integer("user_id")
+    userId: uuid("user_id")
       .notNull()
       .references(() => users.id, {
         onDelete: "cascade",

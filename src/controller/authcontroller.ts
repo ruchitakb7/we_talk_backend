@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import bcrypt from "bcrypt";
-import { eq } from "drizzle-orm";
+import { eq , or, ilike, ne ,and} from "drizzle-orm";
 import "dotenv/config";
 import { db } from "../db/postgresconfig";
 import { users } from "./../model/users";
@@ -200,8 +200,7 @@ export const checkUsernameAvailability = async (
       });
     }
 
-    // If this is the logged-in user's own username,
-    // it is still available for them.
+    
     if (existingUser[0].id === req.user?.id) {
       return res.json({
         available: true,
@@ -360,6 +359,52 @@ export const logout = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Logout failed",
+    });
+  }
+};
+
+
+
+export const searchUsers = async (req: Request, res: Response) => {
+  try {
+    const { q } = req.query;
+
+    if (!q || typeof q !== "string" || q.trim().length === 0) {
+      return res.status(400).json({
+        message: "Search query is required",
+      });
+    }
+
+    const searchTerm = q.trim();
+
+    const currentUserId = req.user.id;
+
+    const results = await db
+      .select({
+        id: users.id,
+        username: users.username,
+        fullName: users.fullName,
+      })
+      .from(users)
+      .where(
+        and(
+          ne(users.id, currentUserId),
+          or(
+            ilike(users.username, `%${searchTerm}%`),
+            ilike(users.fullName, `%${searchTerm}%`)
+          )
+        )
+      )
+      .limit(20);
+
+    return res.status(200).json({
+      users: results,
+    });
+  } catch (error) {
+    console.error("Search users error:", error);
+
+    return res.status(500).json({
+      message: "Internal server error",
     });
   }
 };

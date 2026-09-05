@@ -3,6 +3,7 @@ import {
   serial,
   integer,
   timestamp,
+  uuid,
   unique,
 } from "drizzle-orm/pg-core";
 
@@ -20,7 +21,7 @@ export const chatMembers = pgTable(
         onDelete: "cascade",
       }),
 
-    userId: integer("user_id")
+    userId: uuid("user_id")
       .notNull()
       .references(() => users.id, {
         onDelete: "cascade",

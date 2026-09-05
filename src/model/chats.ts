@@ -4,6 +4,7 @@ import {
   serial,
   varchar,
   integer,
+  uuid,
   timestamp,
 } from "drizzle-orm/pg-core";
 
@@ -22,7 +23,7 @@ export const chats = pgTable("chats", {
   // Used only for group chats
   name: varchar("name", { length: 100 }),
 
-  createdBy: integer("created_by")
+  createdBy: uuid("created_by")
     .references(() => users.id),
 
   createdAt: timestamp("created_at")

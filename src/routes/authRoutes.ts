@@ -1,8 +1,10 @@
 import { Router } from "express";
-import { signup, googleCallback, login,updateUserProfile, authMe, logout,
+import { signup, googleCallback, login,updateUserProfile, authMe, logout,searchUsers,
   checkUsernameAvailability} from "./../controller/authcontroller";
 import { authMiddleware } from "../middleware/authmiddleware";
 import passport from "../config/passport";
+import upload from "../middleware/upload";
+import { uploadFile } from "../middleware/mediaupload";
 
 const router = Router();
 
@@ -21,8 +23,13 @@ router.get("/google/callback",passport.authenticate("google", {session: false,})
 
 router.get("/username/check",authMiddleware,checkUsernameAvailability);
 
+router.get("/search", authMiddleware, searchUsers);
 
 router.patch("/profile",authMiddleware,updateUserProfile);
+
+
+router.post("/files/upload",authMiddleware,upload.single("file"),uploadFile
+);
 
 
 
