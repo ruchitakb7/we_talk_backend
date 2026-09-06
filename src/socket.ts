@@ -28,13 +28,22 @@ export const setupSocket = (httpServer: HttpServer) => {
 
         socket.broadcast.emit("user:online", userId);
 
+
+         socket.on("join:chat", (chatId: string) => {
+            socket.join(`chat:${chatId}`);
+
+            console.log(
+                `User ${userId} joined chat: ${chatId}`
+            );
+        });
+
         socket.on("check:user:online", async (targetUserId: string) => {
             const isOnline = onlineUsers.has(targetUserId);
             console.log(onlineUsers);
             console.log(`User ${targetUserId} online status:`, isOnline);
 
              const last_seen = await getLastSeen(targetUserId);
-            //  console.log("last_seen in socket:", last_seen);
+
 
             socket.emit("user:online:status", {
                 userId: targetUserId,

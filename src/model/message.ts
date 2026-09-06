@@ -5,7 +5,6 @@ import {
   integer,
   text,
   uuid,
-  varchar,
   timestamp,
 } from "drizzle-orm/pg-core";
 
@@ -23,28 +22,27 @@ export const messageTypeEnum = pgEnum("message_type", [
 export const messages = pgTable("messages", {
   id: serial("id").primaryKey(),
 
+  // Personal chat OR group chat
   chatId: integer("chat_id")
     .notNull()
     .references(() => chats.id, {
       onDelete: "cascade",
     }),
 
+  // User who sent the message
   senderId: uuid("sender_id")
     .notNull()
     .references(() => users.id),
 
-  // Text content
-  text: text("text"),
-
-  messageType: messageTypeEnum("message_type")
+  // Type of message
+  type: messageTypeEnum("type")
     .notNull()
     .default("text"),
 
-  mediaUrl: text("media_url"),
+  caption: text("caption"),
 
-  mediaType: varchar("media_type", {
-    length: 100,
-  }),
+  // Text content OR media file path/name
+  message: text("message").notNull(),
 
   createdAt: timestamp("created_at")
     .defaultNow()
