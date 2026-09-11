@@ -5,10 +5,17 @@ import {
   timestamp,
   uuid,
   unique,
+  pgEnum,
 } from "drizzle-orm/pg-core";
 
 import { chats } from "./chats";
 import { users } from "./users";
+
+
+export const chatMemberRoleEnum = pgEnum("chat_member_role", [
+  "member",
+  "admin",
+]);
 
 export const chatMembers = pgTable(
   "chat_members",
@@ -20,6 +27,9 @@ export const chatMembers = pgTable(
       .references(() => chats.id, {
         onDelete: "cascade",
       }),
+       role: chatMemberRoleEnum("role")
+      .notNull()
+      .default("member"),
 
     userId: uuid("user_id")
       .notNull()

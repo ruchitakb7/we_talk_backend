@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { and, eq, inArray, sql,desc,ne} from "drizzle-orm";
+import { and, eq, inArray, sql, desc, ne } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "../db/postgresconfig";
 import { chats } from "../model/chats";
@@ -245,14 +245,27 @@ export const createGroupChat = async (
                 });
 
             // Create member list
+            // const members = [
+            //     {
+            //         chatId: newChat!.id,
+            //         userId: currentUserId,
+            //     },
+            //     ...groupUsers.map((user) => ({
+            //         chatId: newChat!.id,
+            //         userId: user.id,
+            //     })),
+            // ];
+
             const members = [
                 {
                     chatId: newChat!.id,
                     userId: currentUserId,
+                    role: "admin" as const,
                 },
                 ...groupUsers.map((user) => ({
                     chatId: newChat!.id,
                     userId: user.id,
+                    role: "member" as const,
                 })),
             ];
 
@@ -292,76 +305,213 @@ export const createGroupChat = async (
 };
 
 export const getUserChats = async (
-  req: Request,
-  res: Response
+    req: Request,
+    res: Response
 ) => {
-  try {
-    const currentUserId = req.user!.id;
+    try {
+        const currentUserId = req.user!.id;
 
-    const userChats = await db
-      .select({
-        id: chats.id,
-        type: chats.type,
-        name: chats.name,
-        createdAt: chats.createdAt,
-        updatedAt: chats.updatedAt,
-        userId: users.id,
-        username: users.username,
-        fullName: users.fullName,
-      })
-      .from(chatMembers)
-      .innerJoin(
-        chats,
-        eq(chatMembers.chatId, chats.id)
-      )
-      .leftJoin(
-        otherMember,
-        and(
-          eq(otherMember.chatId, chats.id),
-          ne(otherMember.userId, currentUserId),
-          eq(chats.type, "private")
-        )
-      )
-      .leftJoin(
-        users,
-        eq(otherMember.userId, users.id)
-      )
-      .where(
-        eq(chatMembers.userId, currentUserId)
-      )
-      .orderBy(desc(chats.createdAt));
+        const userChats = await db
+            .select({
+                id: chats.id,
+                type: chats.type,
+                name: chats.name,
+                createdAt: chats.createdAt,
+                updatedAt: chats.updatedAt,
+                userId: users.id,
+                username: users.username,
+                fullName: users.fullName,
+            })
+            .from(chatMembers)
+            .innerJoin(
+                chats,
+                eq(chatMembers.chatId, chats.id)
+            )
+            .leftJoin(
+                otherMember,
+                and(
+                    eq(otherMember.chatId, chats.id),
+                    ne(otherMember.userId, currentUserId),
+                    eq(chats.type, "private")
+                )
+            )
+            .leftJoin(
+                users,
+                eq(otherMember.userId, users.id)
+            )
+            .where(
+                eq(chatMembers.userId, currentUserId)
+            )
+            .orderBy(desc(chats.createdAt));
 
-    const formattedChats = userChats.map((chat) => ({
-      id: chat.id,
-      type: chat.type,
-     userId: chat.userId||null,
-    //   name: chat.name,
-      createdAt: chat.createdAt,
-      updatedAt: chat.updatedAt,
-      
-      name: chat.type === "private" ? chat.fullName || chat.username : chat.name,
-    }));
+        const formattedChats = userChats.map((chat) => ({
+            id: chat.id,
+            type: chat.type,
+            userId: chat.userId || null,
+            //   name: chat.name,
+            createdAt: chat.createdAt,
+            updatedAt: chat.updatedAt,
 
-    return res.status(200).json({
-      chats: formattedChats,
-    });
-  } catch (error) {
-    console.error("Get user chats error:", error);
+            name: chat.type === "private" ? chat.fullName || chat.username : chat.name,
+        }));
 
-    return res.status(500).json({
-      message: "Internal server error",
-    });
-  }
+        return res.status(200).json({
+            chats: formattedChats,
+        });
+    } catch (error) {
+        console.error("Get user chats error:", error);
+
+        return res.status(500).json({
+            message: "Internal server error",
+        });
+    }
 };
 
 export const getLastSeen = async (userId: string) => {
-  const result = await db
-    .select({
-      last_seen: users.last_seen,
-    })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
+    const result = await db
+        .select({
+            last_seen: users.last_seen,
+        })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
 
-  return result[0]?.last_seen ?? null;
+    return result[0]?.last_seen ?? null;
+};
+
+export const getChatDetails = async (
+    req: Request,
+    res: Response
+): Promise<Response> => {
+    try {
+        const { chatId } = req.params;
+        const userId = req.user.id;
+
+        const numericChatId = Number(chatId);
+
+        if (!Number.isInteger(numericChatId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid chat ID",
+            });
+        }
+
+        // 1. Check whether current user is a member of this chat
+        const currentMember = await db
+            .select()
+            .from(chatMembers)
+            .where(
+                and(
+                    eq(chatMembers.chatId, numericChatId),
+                    eq(chatMembers.userId, userId)
+                )
+            )
+            .limit(1);
+
+        if (currentMember.length === 0) {
+            return res.status(403).json({
+                success: false,
+                message: "You are not a member of this chat",
+            });
+        }
+
+        // 2. Get chat
+        const chatResult = await db
+            .select({
+                id: chats.id,
+                type: chats.type,
+                name: chats.name,
+                grpprofile: chats.grpprofile,
+                createdBy: chats.createdBy,
+                createdAt: chats.createdAt,
+            })
+            .from(chats)
+            .where(eq(chats.id, numericChatId))
+            .limit(1);
+
+        if (chatResult.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "Chat not found",
+            });
+        }
+
+        const chat = chatResult[0];
+
+        // 3. Group chat
+        if (chat.type === "group") {
+            const members = await db
+                .select({
+                    id: users.id,
+                    fullName: users.fullName,
+                    username: users.username,
+                    profileimg: users.profileimg,
+                    role: chatMembers.role,
+                    joinedAt: chatMembers.joinedAt,
+                })
+                .from(chatMembers)
+                .innerJoin(
+                    users,
+                    eq(chatMembers.userId, users.id)
+                )
+                .where(eq(chatMembers.chatId, numericChatId));
+
+            return res.status(200).json({
+                success: true,
+                data: {
+                    id: chat.id,
+                    type: chat.type,
+                    name: chat.name,
+                    grpprofile: chat.grpprofile,
+                    createdBy: chat.createdBy,
+                    members,
+                },
+            });
+        }
+
+        // 4. Private chat
+        const otherMember = await db
+            .select({
+                id: users.id,
+                fullName: users.fullName,
+                username: users.username,
+                profileimg: users.profileimg || null,
+                joinedAt: chatMembers.joinedAt,
+            })
+            .from(chatMembers)
+            .innerJoin(
+                users,
+                eq(chatMembers.userId, users.id)
+            )
+            .where(
+                and(
+                    eq(chatMembers.chatId, numericChatId),
+                    ne(chatMembers.userId, userId)
+                )
+            )
+            .limit(1);
+
+        if (otherMember.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "Other user not found",
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                id: chat.id,
+                type: chat.type,
+                member: otherMember[0],
+            },
+        });
+    } catch (error) {
+        console.error("Error fetching chat details:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch chat details",
+        });
+    }
 };

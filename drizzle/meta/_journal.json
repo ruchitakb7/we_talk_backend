@@ -57,6 +57,20 @@
       "when": 1788704210244,
       "tag": "0007_high_mephisto",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789142323732,
+      "tag": "0008_aromatic_wrecker",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789145014805,
+      "tag": "0009_nice_war_machine",
+      "breakpoints": true
     }
   ]
 }
