@@ -26,7 +26,7 @@ export const chats = pgTable("chats", {
   createdBy: uuid("created_by")
     .references(() => users.id),
 
-  grpprofile: varchar("profileimg", {
+  grpprofile: varchar("grpprofile", {
     length: 255,
   }),
 

@@ -5,6 +5,7 @@ import { db } from "../db/postgresconfig";
 import { chats } from "../model/chats";
 import { chatMembers } from "../model/chat_members";
 import { users } from "../model/users";
+import { profile } from "node:console";
 const otherMember = alias(chatMembers, "other_member");
 
 export const createPrivateChat = async (
@@ -321,6 +322,8 @@ export const getUserChats = async (
                 userId: users.id,
                 username: users.username,
                 fullName: users.fullName,
+                groupProfile: chats.grpprofile,
+                userProfile: users.profileimg,
             })
             .from(chatMembers)
             .innerJoin(
@@ -351,6 +354,10 @@ export const getUserChats = async (
             //   name: chat.name,
             createdAt: chat.createdAt,
             updatedAt: chat.updatedAt,
+            profileimg:
+                chat.type === "group"
+                    ? chat.groupProfile || null
+                    : chat.userProfile || null,
 
             name: chat.type === "private" ? chat.fullName || chat.username : chat.name,
         }));
@@ -512,6 +519,71 @@ export const getChatDetails = async (
         return res.status(500).json({
             success: false,
             message: "Failed to fetch chat details",
+        });
+    }
+};
+
+export const updateGroupDetails = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+        const { chatId } = req.params;
+        const { name, grpprofile } = req.body;
+
+        if (!chatId) {
+            return res.status(400).json({
+                message: "Chat ID is required",
+            });
+        }
+
+        // At least one field should be provided
+        if (name === undefined && grpprofile === undefined) {
+            return res.status(400).json({
+                message: "Group name or profile is required",
+            });
+        }
+
+        const updateData: {
+            name?: string;
+            grpprofile?: string | null;
+        } = {};
+
+        if (name !== undefined) {
+            if (typeof name !== "string" || !name.trim()) {
+                return res.status(400).json({
+                    message: "Group name cannot be empty",
+                });
+            }
+
+            updateData.name = name.trim();
+        }
+
+        if (grpprofile !== undefined) {
+            updateData.grpprofile = grpprofile;
+        }
+
+        const [updatedChat] = await db
+            .update(chats)
+            .set(updateData)
+            .where(eq(chats.id, Number(chatId)))
+            .returning();
+
+        if (!updatedChat) {
+            return res.status(404).json({
+                message: "Chat not found",
+            });
+        }
+
+        return res.status(200).json({
+            message: "Group details updated successfully",
+            chat: updatedChat,
+        });
+    } catch (error) {
+        console.error("Update group details error:", error);
+
+        return res.status(500).json({
+            message: "Internal server error",
         });
     }
 };

@@ -5,6 +5,7 @@ import passport from "./config/passport";
 import authRoutes from "./routes/authRoutes";
 import chatRoutes from "./routes/chatRoutes";
 import messageRoutes from "./routes/messageRoute";
+import chatMembersRoutes from "./routes/chatMembersRoutes";
 import cors from "cors";
 import { setupSocket } from "./socket";
 const app = express();
@@ -24,6 +25,7 @@ app.use(passport.initialize());
 app.use("/api/auth", authRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/messages", messageRoutes);
+app.use("/api/chat/members", chatMembersRoutes);
 
 const httpServer = createServer(app);
 

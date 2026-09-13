@@ -2,7 +2,8 @@ import { Request, Response } from "express";
 import { db } from "../db/postgresconfig";
 import { messages } from "../model/message";
 import { chatMembers } from "../model/chat_members";
-import { eq, and, asc, desc } from "drizzle-orm";
+import { eq, and, asc, desc, getTableColumns } from "drizzle-orm";
+import { users } from "../model/users";
 
 
 
@@ -109,8 +110,13 @@ export const getMessages = async (
 
         // Fetch messages
         const chatMessages = await db
-            .select()
+            .select({
+                ...getTableColumns(messages),
+                senderUsername: users.username,
+                profileimg: users.profileimg||null
+            })
             .from(messages)
+            .innerJoin(users, eq(messages.senderId, users.id))
             .where(eq(messages.chatId, chatId))
             .orderBy(asc(messages.createdAt));
 

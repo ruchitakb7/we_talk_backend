@@ -71,6 +71,13 @@
       "when": 1789145014805,
       "tag": "0009_nice_war_machine",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789325122175,
+      "tag": "0010_sweet_shiva",
+      "breakpoints": true
     }
   ]
 }
