@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { and, eq, inArray, sql, desc, ne } from "drizzle-orm";
+import { and, eq, inArray, sql, desc, ne,isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "../db/postgresconfig";
 import { chats } from "../model/chats";
@@ -305,6 +305,7 @@ export const createGroupChat = async (
     }
 };
 
+
 export const getUserChats = async (
     req: Request,
     res: Response
@@ -319,9 +320,11 @@ export const getUserChats = async (
                 name: chats.name,
                 createdAt: chats.createdAt,
                 updatedAt: chats.updatedAt,
+
                 userId: users.id,
                 username: users.username,
                 fullName: users.fullName,
+
                 groupProfile: chats.grpprofile,
                 userProfile: users.profileimg,
             })
@@ -343,7 +346,10 @@ export const getUserChats = async (
                 eq(otherMember.userId, users.id)
             )
             .where(
-                eq(chatMembers.userId, currentUserId)
+                and(
+                    eq(chatMembers.userId, currentUserId),
+                    isNull(chatMembers.leftAt)
+                )
             )
             .orderBy(desc(chats.createdAt));
 
@@ -351,20 +357,25 @@ export const getUserChats = async (
             id: chat.id,
             type: chat.type,
             userId: chat.userId || null,
-            //   name: chat.name,
+
             createdAt: chat.createdAt,
             updatedAt: chat.updatedAt,
+
             profileimg:
                 chat.type === "group"
                     ? chat.groupProfile || null
                     : chat.userProfile || null,
 
-            name: chat.type === "private" ? chat.fullName || chat.username : chat.name,
+            name:
+                chat.type === "private"
+                    ? chat.fullName || chat.username
+                    : chat.name,
         }));
 
         return res.status(200).json({
             chats: formattedChats,
         });
+
     } catch (error) {
         console.error("Get user chats error:", error);
 
@@ -373,6 +384,75 @@ export const getUserChats = async (
         });
     }
 };
+
+// export const getUserChats = async (
+//     req: Request,
+//     res: Response
+// ) => {
+//     try {
+//         const currentUserId = req.user!.id;
+
+//         const userChats = await db
+//             .select({
+//                 id: chats.id,
+//                 type: chats.type,
+//                 name: chats.name,
+//                 createdAt: chats.createdAt,
+//                 updatedAt: chats.updatedAt,
+//                 userId: users.id,
+//                 username: users.username,
+//                 fullName: users.fullName,
+//                 groupProfile: chats.grpprofile,
+//                 userProfile: users.profileimg,
+//             })
+//             .from(chatMembers)
+//             .innerJoin(
+//                 chats,
+//                 eq(chatMembers.chatId, chats.id)
+//             )
+//             .leftJoin(
+//                 otherMember,
+//                 and(
+//                     eq(otherMember.chatId, chats.id),
+//                     ne(otherMember.userId, currentUserId),
+//                     eq(chats.type, "private")
+//                 )
+//             )
+//             .leftJoin(
+//                 users,
+//                 eq(otherMember.userId, users.id)
+//             )
+//             .where(
+//                 eq(chatMembers.userId, currentUserId)
+//             )
+//             .orderBy(desc(chats.createdAt));
+
+//         const formattedChats = userChats.map((chat) => ({
+//             id: chat.id,
+//             type: chat.type,
+//             userId: chat.userId || null,
+//             //   name: chat.name,
+//             createdAt: chat.createdAt,
+//             updatedAt: chat.updatedAt,
+//             profileimg:
+//                 chat.type === "group"
+//                     ? chat.groupProfile || null
+//                     : chat.userProfile || null,
+
+//             name: chat.type === "private" ? chat.fullName || chat.username : chat.name,
+//         }));
+
+//         return res.status(200).json({
+//             chats: formattedChats,
+//         });
+//     } catch (error) {
+//         console.error("Get user chats error:", error);
+
+//         return res.status(500).json({
+//             message: "Internal server error",
+//         });
+//     }
+// };
 
 export const getLastSeen = async (userId: string) => {
     const result = await db
@@ -461,7 +541,9 @@ export const getChatDetails = async (
                     users,
                     eq(chatMembers.userId, users.id)
                 )
-                .where(eq(chatMembers.chatId, numericChatId));
+                .where(
+                    and(eq(chatMembers.chatId, numericChatId), isNull(chatMembers.leftAt))
+                );
 
             return res.status(200).json({
                 success: true,

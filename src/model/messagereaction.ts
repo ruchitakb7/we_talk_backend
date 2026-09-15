@@ -32,7 +32,8 @@ export const messageReactions = pgTable(
       length: 20,
     }).notNull(),
 
-    createdAt: timestamp("created_at")
+    createdAt: timestamp("created_at",{
+      withTimezone: true,})
       .defaultNow()
       .notNull(),
   },

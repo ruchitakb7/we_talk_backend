@@ -27,7 +27,7 @@ export const chatMembers = pgTable(
       .references(() => chats.id, {
         onDelete: "cascade",
       }),
-       role: chatMemberRoleEnum("role")
+    role: chatMemberRoleEnum("role")
       .notNull()
       .default("member"),
 
@@ -37,7 +37,11 @@ export const chatMembers = pgTable(
         onDelete: "cascade",
       }),
 
-    joinedAt: timestamp("joined_at")
+    leftAt: timestamp("left_at",{
+      withTimezone: true,}),
+
+    joinedAt: timestamp("joined_at",{
+      withTimezone: true,})
       .defaultNow()
       .notNull(),
   },

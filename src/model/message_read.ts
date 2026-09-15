@@ -27,7 +27,8 @@ export const messageReads = pgTable(
         onDelete: "cascade",
       }),
 
-    readAt: timestamp("read_at")
+    readAt: timestamp("read_at",{
+      withTimezone: true,})
       .defaultNow()
       .notNull(),
   },

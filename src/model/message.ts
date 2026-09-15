@@ -17,6 +17,7 @@ export const messageTypeEnum = pgEnum("message_type", [
   "video",
   "file",
   "audio",
+  "system"
 ]);
 
 export const messages = pgTable("messages", {
@@ -44,14 +45,17 @@ export const messages = pgTable("messages", {
   // Text content OR media file path/name
   message: text("message").notNull(),
 
-  createdAt: timestamp("created_at")
+  createdAt: timestamp("created_at",{
+  withTimezone: true,})
     .defaultNow()
     .notNull(),
 
-  updatedAt: timestamp("updated_at")
+  updatedAt: timestamp("updated_at",{
+  withTimezone: true,})
     .defaultNow()
     .notNull(),
 
   // Soft delete
-  deletedAt: timestamp("deleted_at"),
+  deletedAt: timestamp("deleted_at",{
+  withTimezone: true,}),
 });

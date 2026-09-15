@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { db } from "../db/postgresconfig";
 import { messages } from "../model/message";
 import { chatMembers } from "../model/chat_members";
-import { eq, and, asc, desc, getTableColumns } from "drizzle-orm";
+import { eq, and, asc, desc, getTableColumns, isNull,lte,gte } from "drizzle-orm";
 import { users } from "../model/users";
 
 
@@ -30,7 +30,8 @@ export const createMessage = async (
             .where(
                 and(
                     eq(chatMembers.chatId, chatId),
-                    eq(chatMembers.userId, senderId)
+                    eq(chatMembers.userId, senderId),
+                    isNull(chatMembers.leftAt)
                 )
             )
             .limit(1);
@@ -75,61 +76,142 @@ export const createMessage = async (
 
 
 export const getMessages = async (
-    req: Request,
-    res: Response
+  req: Request,
+  res: Response
 ) => {
-    try {
-        const userId = req.user.id;
-        const chatId = Number(req.params.chatId);
+  try {
+    const userId = req.user.id;
+    const chatId = Number(req.params.chatId);
 
-        if (!chatId) {
-            return res.status(400).json({
-                success: false,
-                message: "Chat ID is required",
-            });
-        }
-
-        // Check if user is a member of the chat
-        const member = await db
-            .select()
-            .from(chatMembers)
-            .where(
-                and(
-                    eq(chatMembers.chatId, chatId),
-                    eq(chatMembers.userId, userId)
-                )
-            )
-            .limit(1);
-
-        if (member.length === 0) {
-            return res.status(403).json({
-                success: false,
-                message: "You are not a member of this chat",
-            });
-        }
-
-        // Fetch messages
-        const chatMessages = await db
-            .select({
-                ...getTableColumns(messages),
-                senderUsername: users.username,
-                profileimg: users.profileimg||null
-            })
-            .from(messages)
-            .innerJoin(users, eq(messages.senderId, users.id))
-            .where(eq(messages.chatId, chatId))
-            .orderBy(asc(messages.createdAt));
-
-        return res.status(200).json({
-            success: true,
-            data: chatMessages,
-        });
-    } catch (error) {
-        console.error("Get messages error:", error);
-
-        return res.status(500).json({
-            success: false,
-            message: "Failed to fetch messages",
-        });
+    if (!chatId) {
+      return res.status(400).json({
+        success: false,
+        message: "Chat ID is required",
+      });
     }
+
+    // Get user's membership history
+    const [member] = await db
+      .select({
+        joinedAt: chatMembers.joinedAt,
+        leftAt: chatMembers.leftAt,
+      })
+      .from(chatMembers)
+      .where(
+        and(
+          eq(chatMembers.chatId, chatId),
+          eq(chatMembers.userId, userId)
+        )
+      )
+      .limit(1);
+
+    if (!member) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not a member of this chat",
+      });
+    }
+
+    let messageCondition;
+
+    if (member.leftAt !== null) {
+      // User has left/been removed.
+      // Show messages only between their join and leave time.
+      messageCondition = and(
+        eq(messages.chatId, chatId),
+        gte(messages.createdAt, member.joinedAt),
+        lte(messages.createdAt, member.leftAt)
+      );
+    } else {
+      // User is currently an active member.
+      // Show messages from when they joined until now.
+      messageCondition = and(
+        eq(messages.chatId, chatId),
+        gte(messages.createdAt, member.joinedAt)
+      );
+    }
+
+    const chatMessages = await db
+      .select({
+        ...getTableColumns(messages),
+        senderUsername: users.username,
+        profileimg: users.profileimg || null,
+      })
+      .from(messages)
+      .innerJoin(users, eq(messages.senderId, users.id))
+      .where(messageCondition)
+      .orderBy(asc(messages.createdAt));
+
+    return res.status(200).json({
+      success: true,
+      data: chatMessages,
+    });
+  } catch (error) {
+    console.error("Get messages error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch messages",
+    });
+  }
 };
+
+// export const getMessages = async (
+//     req: Request,
+//     res: Response
+// ) => {
+//     try {
+//         const userId = req.user.id;
+//         const chatId = Number(req.params.chatId);
+
+//         if (!chatId) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "Chat ID is required",
+//             });
+//         }
+
+//         // Check if user is a member of the chat
+//         const member = await db
+//             .select()
+//             .from(chatMembers)
+//             .where(
+//                 and(
+//                     eq(chatMembers.chatId, chatId),
+//                     eq(chatMembers.userId, userId)
+//                 )
+//             )
+//             .limit(1);
+
+//         if (member.length === 0) {
+//             return res.status(403).json({
+//                 success: false,
+//                 message: "You are not a member of this chat",
+//             });
+//         }
+
+//         // Fetch messages
+//         const chatMessages = await db
+//             .select({
+//                 ...getTableColumns(messages),
+//                 senderUsername: users.username,
+//                 profileimg: users.profileimg||null
+//             })
+//             .from(messages)
+//             .innerJoin(users, eq(messages.senderId, users.id))
+//             .where(eq(messages.chatId, chatId))
+//             .orderBy(asc(messages.createdAt));
+
+//         return res.status(200).json({
+//             success: true,
+//             data: chatMessages,
+//         });
+//     } catch (error) {
+//         console.error("Get messages error:", error);
+
+//         return res.status(500).json({
+//             success: false,
+//             message: "Failed to fetch messages",
+//         });
+//     }
+// };
