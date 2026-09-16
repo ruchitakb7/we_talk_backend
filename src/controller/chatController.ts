@@ -5,8 +5,8 @@ import { db } from "../db/postgresconfig";
 import { chats } from "../model/chats";
 import { chatMembers } from "../model/chat_members";
 import { users } from "../model/users";
-import { profile } from "node:console";
-const otherMember = alias(chatMembers, "other_member");
+import { messages } from "../model/message";
+const otherMember = alias(chatMembers, "otherMember");
 
 export const createPrivateChat = async (
     req: Request,
@@ -313,6 +313,7 @@ export const getUserChats = async (
     try {
         const currentUserId = req.user!.id;
 
+        // 1. Get user's active chats
         const userChats = await db
             .select({
                 id: chats.id,
@@ -348,32 +349,60 @@ export const getUserChats = async (
             .where(
                 and(
                     eq(chatMembers.userId, currentUserId),
+
+                    // User must still be a member
                     isNull(chatMembers.leftAt)
                 )
             )
             .orderBy(desc(chats.createdAt));
 
-        const formattedChats = userChats.map((chat) => ({
-            id: chat.id,
-            type: chat.type,
-            userId: chat.userId || null,
+        // 2. Get latest message for each chat
+        const chatsWithMessages = await Promise.all(
+            userChats.map(async (chat) => {
 
-            createdAt: chat.createdAt,
-            updatedAt: chat.updatedAt,
+                const [lastMessage] = await db
+                    .select({
+                        message: messages.message,
+                        type: messages.type,
+                        createdAt: messages.createdAt,
+                    })
+                    .from(messages)
+                    .where(
+                        eq(messages.chatId, chat.id)
+                    )
+                    .orderBy(
+                        desc(messages.createdAt)
+                    )
+                    .limit(1);
 
-            profileimg:
-                chat.type === "group"
-                    ? chat.groupProfile || null
-                    : chat.userProfile || null,
+                return {
+                    id: chat.id,
+                    type: chat.type,
 
-            name:
-                chat.type === "private"
-                    ? chat.fullName || chat.username
-                    : chat.name,
-        }));
+                    userId: chat.userId || null,
+
+                    createdAt: chat.createdAt,
+                    updatedAt: chat.updatedAt,
+
+                    profileimg:
+                        chat.type === "group"
+                            ? chat.groupProfile || null
+                            : chat.userProfile || null,
+
+                    name:
+                        chat.type === "private"
+                            ? chat.fullName || chat.username
+                            : chat.name,
+
+                    lastMessage: lastMessage?.message || null,
+                    lastMessageType: lastMessage?.type || null,
+                    lastMessageAt: lastMessage?.createdAt || null,
+                };
+            })
+        );
 
         return res.status(200).json({
-            chats: formattedChats,
+            chats: chatsWithMessages,
         });
 
     } catch (error) {
@@ -385,74 +414,6 @@ export const getUserChats = async (
     }
 };
 
-// export const getUserChats = async (
-//     req: Request,
-//     res: Response
-// ) => {
-//     try {
-//         const currentUserId = req.user!.id;
-
-//         const userChats = await db
-//             .select({
-//                 id: chats.id,
-//                 type: chats.type,
-//                 name: chats.name,
-//                 createdAt: chats.createdAt,
-//                 updatedAt: chats.updatedAt,
-//                 userId: users.id,
-//                 username: users.username,
-//                 fullName: users.fullName,
-//                 groupProfile: chats.grpprofile,
-//                 userProfile: users.profileimg,
-//             })
-//             .from(chatMembers)
-//             .innerJoin(
-//                 chats,
-//                 eq(chatMembers.chatId, chats.id)
-//             )
-//             .leftJoin(
-//                 otherMember,
-//                 and(
-//                     eq(otherMember.chatId, chats.id),
-//                     ne(otherMember.userId, currentUserId),
-//                     eq(chats.type, "private")
-//                 )
-//             )
-//             .leftJoin(
-//                 users,
-//                 eq(otherMember.userId, users.id)
-//             )
-//             .where(
-//                 eq(chatMembers.userId, currentUserId)
-//             )
-//             .orderBy(desc(chats.createdAt));
-
-//         const formattedChats = userChats.map((chat) => ({
-//             id: chat.id,
-//             type: chat.type,
-//             userId: chat.userId || null,
-//             //   name: chat.name,
-//             createdAt: chat.createdAt,
-//             updatedAt: chat.updatedAt,
-//             profileimg:
-//                 chat.type === "group"
-//                     ? chat.groupProfile || null
-//                     : chat.userProfile || null,
-
-//             name: chat.type === "private" ? chat.fullName || chat.username : chat.name,
-//         }));
-
-//         return res.status(200).json({
-//             chats: formattedChats,
-//         });
-//     } catch (error) {
-//         console.error("Get user chats error:", error);
-
-//         return res.status(500).json({
-//             message: "Internal server error",
-//         });
-//     }
-// };
 
 export const getLastSeen = async (userId: string) => {
     const result = await db
