@@ -42,20 +42,27 @@ export const messages = pgTable("messages", {
 
   caption: text("caption"),
 
-  // Text content OR media file path/name
+
   message: text("message").notNull(),
 
-  createdAt: timestamp("created_at",{
-  withTimezone: true,})
+  totalRecipients: integer("totalRecipients").notNull().default(0),
+  deliveredCount: integer("deliveredCount").notNull().default(0),
+  seenCount: integer("seenCount").notNull().default(0),
+
+  createdAt: timestamp("created_at", {
+    withTimezone: true,
+  })
     .defaultNow()
     .notNull(),
 
-  updatedAt: timestamp("updated_at",{
-  withTimezone: true,})
+  updatedAt: timestamp("updated_at", {
+    withTimezone: true,
+  })
     .defaultNow()
     .notNull(),
 
   // Soft delete
-  deletedAt: timestamp("deleted_at",{
-  withTimezone: true,}),
+  deletedAt: timestamp("deleted_at", {
+    withTimezone: true,
+  }),
 });

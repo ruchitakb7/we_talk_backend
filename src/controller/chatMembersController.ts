@@ -1,18 +1,20 @@
 
 import { Request, Response } from "express";
-import { eq, and , isNull} from "drizzle-orm";
+import { eq, and, isNull , sql} from "drizzle-orm";
 
 import { db } from "../db/postgresconfig";
 import { chatMembers } from "../model/chat_members";
-import {messages} from "../model/message";
+import { messages } from "../model/message";
 import { users } from "../model/users";
+import { chats } from "../model/chats";
 
 export const removeChatMember = async (
   req: Request,
   res: Response
 ) => {
   try {
-    const { chatId, userId } = req.params;
+    const { chatId} = req.params;
+    const userId = req.params.userId as string;
 
     console.log("Chat ID:", chatId, "User ID:", userId);
 
@@ -58,7 +60,7 @@ export const removeChatMember = async (
       });
     }
 
-    // Mark member as left instead of deleting membership history
+
     await db
       .update(chatMembers)
       .set({
@@ -72,7 +74,13 @@ export const removeChatMember = async (
         )
       );
 
-    // Create system message
+    await db
+      .update(chats)
+      .set({
+        totalMembers: sql`${chats.totalMembers} - 1`,
+      })
+      .where(eq(chats.id, numericChatId));
+
     const [systemMessage] = await db
       .insert(messages)
       .values({
@@ -83,7 +91,7 @@ export const removeChatMember = async (
       })
       .returning();
 
-    // Broadcast system message
+
     const io = req.app.get("io");
 
     io.to(`chat:${numericChatId}`).emit(
@@ -174,6 +182,13 @@ export const addChatMember = async (
         )
         .returning();
 
+      await db
+        .update(chats)
+        .set({
+          totalMembers: sql`${chats.totalMembers} + 1`,
+        })
+        .where(eq(chats.id, numericChatId));
+
       // Create system message
       const [systemMessage] = await db
         .insert(messages)
@@ -208,6 +223,13 @@ export const addChatMember = async (
         role: "member",
       })
       .returning();
+
+    await db
+      .update(chats)
+      .set({
+        totalMembers: sql`${chats.totalMembers} + 1`,
+      })
+      .where(eq(chats.id, numericChatId));
 
     // Create system message
     const [systemMessage] = await db
@@ -247,7 +269,8 @@ export const toggleMemberRole = async (
   res: Response
 ) => {
   try {
-    const { chatId, userId } = req.params;
+    const { chatId } = req.params;
+    const userId = req.params.userId as string;
 
     if (!chatId || !userId) {
       return res.status(400).json({
@@ -274,8 +297,7 @@ export const toggleMemberRole = async (
     }
 
     // Toggle role
-    const newRole =
-      member[0].role === "admin"
+    const newRole =member[0].role === "admin"
         ? "member"
         : "admin";
 
@@ -371,6 +393,14 @@ export const leaveGroup = async (
           isNull(chatMembers.leftAt)
         )
       );
+
+    await db
+      .update(chats)
+      .set({
+        totalMembers: sql`${chats.totalMembers} - 1`,
+      })
+      .where(eq(chats.id, numericChatId));
+
 
     // Create system message
     const [systemMessage] = await db

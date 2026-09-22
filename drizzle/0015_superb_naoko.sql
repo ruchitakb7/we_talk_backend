@@ -1,0 +1,1 @@
+ALTER TABLE "chats" ADD COLUMN "total_members" integer DEFAULT 0 NOT NULL;

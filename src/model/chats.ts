@@ -31,13 +31,17 @@ export const chats = pgTable("chats", {
   }),
 
 
-  createdAt: timestamp("created_at",{
-  withTimezone: true,})
+  createdAt: timestamp("created_at", {
+    withTimezone: true,
+  })
     .defaultNow()
     .notNull(),
 
-  updatedAt: timestamp("updated_at",{
-  withTimezone: true,})
+  totalMembers: integer("totalMembers").notNull().default(0),
+
+  updatedAt: timestamp("updated_at", {
+    withTimezone: true,
+  })
     .defaultNow()
     .notNull(),
 });

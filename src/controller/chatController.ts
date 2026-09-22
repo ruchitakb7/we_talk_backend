@@ -22,12 +22,7 @@ export const createPrivateChat = async (
         // Validate userId
         const targetUserId = userId;
 
-        // if (!targetUserId || typeof targetUserId !== "string") {
-        //     return res.status(400).json({
-        //         message: "Valid userId is required",
-        //     });
-        // }
-        // Don't allow user to create a chat with themselves
+       
         if (currentUserId === targetUserId) {
             return res.status(400).json({
                 message: "You cannot create a chat with yourself",
@@ -109,6 +104,7 @@ export const createPrivateChat = async (
                 .values({
                     type: "private",
                     createdBy: currentUserId,
+                    totalMembers: 2,
                 })
                 .returning({
                     id: chats.id,
@@ -237,25 +233,16 @@ export const createGroupChat = async (
                     type: "group",
                     name: groupName.trim(),
                     createdBy: currentUserId,
+                    totalMembers: groupUsers.length + 1,
                 })
                 .returning({
                     id: chats.id,
                     type: chats.type,
                     name: chats.name,
                     createdAt: chats.createdAt,
+                    totalMembers: chats.totalMembers
                 });
 
-            // Create member list
-            // const members = [
-            //     {
-            //         chatId: newChat!.id,
-            //         userId: currentUserId,
-            //     },
-            //     ...groupUsers.map((user) => ({
-            //         chatId: newChat!.id,
-            //         userId: user.id,
-            //     })),
-            // ];
 
             const members = [
                 {

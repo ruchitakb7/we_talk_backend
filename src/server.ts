@@ -10,7 +10,7 @@ import cors from "cors";
 import { setupSocket } from "./socket";
 const app = express();
 import { createServer } from "http";
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 4000;
 
 app.use(express.json());
 app.use(cookieParser());

@@ -2,8 +2,9 @@ import { Request, Response } from "express";
 import { db } from "../db/postgresconfig";
 import { messages } from "../model/message";
 import { chatMembers } from "../model/chat_members";
-import { eq, and, asc, desc, getTableColumns, isNull,lte,gte } from "drizzle-orm";
+import { eq, and, asc, desc, getTableColumns, isNull,lte,gte,ne } from "drizzle-orm";
 import { users } from "../model/users";
+import { messageStatuses } from "../model/messagestatus";
 
 
 
@@ -43,17 +44,47 @@ export const createMessage = async (
             });
         }
 
-        // Create message
-        const [newMessage] = await db
-            .insert(messages)
-            .values({
-                chatId,
-                senderId,
-                type,
-                message,
-                caption: caption || null,
+        // Get active recipients (excluding sender)
+        const recipients = await db
+            .select({
+                userId: chatMembers.userId,
             })
-            .returning();
+            .from(chatMembers)
+            .where(
+                and(
+                    eq(chatMembers.chatId, chatId),
+                    ne(chatMembers.userId, senderId),
+                    isNull(chatMembers.leftAt)
+                )
+            );
+
+        // Create message and statuses in a transaction
+        const newMessage = await db.transaction(async (tx) => {
+            // Create message
+            const [createdMessage] = await tx
+                .insert(messages)
+                .values({
+                    chatId,
+                    senderId,
+                    type,
+                    message,
+                    caption: caption || null,
+                })
+                .returning();
+
+            // Create initial status records for recipients
+            if (recipients.length > 0) {
+                await tx.insert(messageStatuses).values(
+                    recipients.map((recipient) => ({
+                        messageId: createdMessage.id,
+                        userId: recipient.userId,
+                        status: "sent" as const,
+                    }))
+                );
+            }
+
+            return createdMessage;
+        });
 
         const io = req.app.get("io");
 
@@ -73,6 +104,7 @@ export const createMessage = async (
         });
     }
 };
+
 
 
 export const getMessages = async (
@@ -156,62 +188,4 @@ export const getMessages = async (
   }
 };
 
-// export const getMessages = async (
-//     req: Request,
-//     res: Response
-// ) => {
-//     try {
-//         const userId = req.user.id;
-//         const chatId = Number(req.params.chatId);
 
-//         if (!chatId) {
-//             return res.status(400).json({
-//                 success: false,
-//                 message: "Chat ID is required",
-//             });
-//         }
-
-//         // Check if user is a member of the chat
-//         const member = await db
-//             .select()
-//             .from(chatMembers)
-//             .where(
-//                 and(
-//                     eq(chatMembers.chatId, chatId),
-//                     eq(chatMembers.userId, userId)
-//                 )
-//             )
-//             .limit(1);
-
-//         if (member.length === 0) {
-//             return res.status(403).json({
-//                 success: false,
-//                 message: "You are not a member of this chat",
-//             });
-//         }
-
-//         // Fetch messages
-//         const chatMessages = await db
-//             .select({
-//                 ...getTableColumns(messages),
-//                 senderUsername: users.username,
-//                 profileimg: users.profileimg||null
-//             })
-//             .from(messages)
-//             .innerJoin(users, eq(messages.senderId, users.id))
-//             .where(eq(messages.chatId, chatId))
-//             .orderBy(asc(messages.createdAt));
-
-//         return res.status(200).json({
-//             success: true,
-//             data: chatMessages,
-//         });
-//     } catch (error) {
-//         console.error("Get messages error:", error);
-
-//         return res.status(500).json({
-//             success: false,
-//             message: "Failed to fetch messages",
-//         });
-//     }
-// };

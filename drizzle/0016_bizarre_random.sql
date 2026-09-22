@@ -1,0 +1,1 @@
+ALTER TABLE "chats" RENAME COLUMN "total_members" TO "totalMembers";
