@@ -5,8 +5,9 @@ import { updateLastSeen } from "./controller/authcontroller";
 import { getLastSeen } from "./controller/chatController";
 import { db } from "./db/postgresconfig";
 import { chatMembers } from "./model/chat_members";
-import { eq } from "drizzle-orm";
-
+import { eq, and, sql } from "drizzle-orm";
+import { messageStatuses } from "./model/messagestatus";
+import { messages } from "./model/message";
 
 export const setupSocket = (httpServer: HttpServer) => {
     const onlineUsers = new Map<string, Set<string>>();
@@ -84,21 +85,296 @@ export const setupSocket = (httpServer: HttpServer) => {
             });
         });
 
+        socket.on("message:delivered", async ({ messageId }) => {
+            try {
+                const [message] = await db
+                    .select({
+                        id: messages.id,
+                        chatId: messages.chatId,
+                        senderId: messages.senderId,
+                        deliveredCount: messages.deliveredCount,
+                        seenCount: messages.seenCount,
+                        totalRecipients: messages.totalRecipients,
+                    })
+                    .from(messages)
+                    .where(eq(messages.id, messageId))
+                    .limit(1);
+
+                if (!message) {
+                    return;
+                }
+
+                const [statusRecord] = await db
+                    .select()
+                    .from(messageStatuses)
+                    .where(
+                        and(
+                            eq(messageStatuses.messageId, messageId),
+                            eq(messageStatuses.userId, userId)
+                        )
+                    )
+                    .limit(1);
+
+                if (!statusRecord) {
+                    return;
+                }
+
+                // Prevent duplicate delivery events
+                if (statusRecord.status !== "sent") {
+                    return;
+                }
+
+                await db
+                    .update(messageStatuses)
+                    .set({
+                        status: "delivered",
+                        updatedAt: new Date(),
+                    })
+                    .where(
+                        and(
+                            eq(messageStatuses.messageId, messageId),
+                            eq(messageStatuses.userId, userId)
+                        )
+                    );
+
+                const [updatedMessage] = await db
+                    .update(messages)
+                    .set({
+                        deliveredCount: sql`${messages.deliveredCount} + 1`,
+                    })
+                    .where(eq(messages.id, messageId))
+                    .returning({
+                        id: messages.id,
+                        senderId: messages.senderId,
+                        deliveredCount: messages.deliveredCount,
+                        seenCount: messages.seenCount,
+                        totalRecipients: messages.totalRecipients,
+                    });
+
+                if (!updatedMessage) {
+                    return;
+                }
+
+                io.to(`chat:${message.chatId}`).emit(
+                    "message:status",
+                    {
+                        messageId: message.id,
+                        senderId: message.senderId,
+                        status: "delivered",
+                    }
+                );
+
+            } catch (error) {
+                console.error("Message delivered error:", error);
+            }
+        });
+
+        socket.on("message:read", async ({ messageId }) => {
+            try {
+
+
+                const [message] = await db
+                    .select({
+                        id: messages.id,
+                        chatId: messages.chatId,
+                        senderId: messages.senderId,
+                        totalRecipients: messages.totalRecipients,
+                        deliveredCount: messages.deliveredCount,
+                        seenCount: messages.seenCount,
+                    })
+                    .from(messages)
+                    .where(eq(messages.id, messageId))
+                    .limit(1);
+
+
+
+                if (!message) {
+                    console.log("Message not found");
+                    return;
+                }
+
+                const [status] = await db
+                    .select({
+                        id: messageStatuses.id,
+                        userId: messageStatuses.userId,
+                        status: messageStatuses.status,
+                    })
+                    .from(messageStatuses)
+                    .where(
+                        and(
+                            eq(messageStatuses.messageId, messageId),
+                            eq(messageStatuses.userId, userId)
+                        )
+                    )
+                    .limit(1);
+
+
+
+                if (!status) {
+                    console.log(
+                        "No message status found for this user"
+                    );
+                    return;
+                }
+
+                if (status.status === "read") {
+                    console.log("Already read");
+                    return;
+                }
+
+                // sent -> read
+                if (status.status === "sent") {
+                    console.log("Changing SENT -> READ");
+
+                    await db
+                        .update(messageStatuses)
+                        .set({
+                            status: "read",
+                            updatedAt: new Date(),
+                        })
+                        .where(eq(messageStatuses.id, status.id));
+
+                    const [updatedMessage] = await db
+                        .update(messages)
+                        .set({
+                            deliveredCount:
+                                sql`${messages.deliveredCount} + 1`,
+                            seenCount:
+                                sql`${messages.seenCount} + 1`,
+                        })
+                        .where(eq(messages.id, messageId))
+                        .returning({
+                            deliveredCount:
+                                messages.deliveredCount,
+                            seenCount:
+                                messages.seenCount,
+                        });
+
+
+
+                    io.to(`chat:${message.chatId}`).emit(
+                        "message:status",
+                        {
+                            messageId: message.id,
+                            senderId: message.senderId,
+                            status: "read",
+                        }
+                    );
+
+                    return;
+                }
+
+                // delivered -> read
+                if (status.status === "delivered") {
+
+
+                    await db
+                        .update(messageStatuses)
+                        .set({
+                            status: "read",
+                            updatedAt: new Date(),
+                        })
+                        .where(eq(messageStatuses.id, status.id));
+
+                    const [updatedMessage] = await db
+                        .update(messages)
+                        .set({
+                            seenCount:
+                                sql`${messages.seenCount} + 1`,
+                        })
+                        .where(eq(messages.id, messageId))
+                        .returning({
+                            deliveredCount:
+                                messages.deliveredCount,
+                            seenCount:
+                                messages.seenCount,
+                        });
+
+
+                    io.to(`chat:${message.chatId}`).emit(
+                        "message:status",
+                        {
+                            messageId: message.id,
+                            senderId: message.senderId,
+                            status: "read",
+                        }
+                    );
+                }
+            } catch (error) {
+                console.error(
+                    "Message read error:",
+                    error
+                );
+            }
+        });
+
+        socket.on("chat:opened", async ({ chatId }) => {
+            try {
+                const userId = socket.user.id;
+
+                // Find all delivered messages for this user in this chat
+                const deliveredMessages = await db
+                    .select({
+                        statusId: messageStatuses.id,
+                        messageId: messageStatuses.messageId,
+                    })
+                    .from(messageStatuses)
+                    .innerJoin(
+                        messages,
+                        eq(messageStatuses.messageId, messages.id)
+                    )
+                    .where(
+                        and(
+                            eq(messages.chatId, Number(chatId)),
+                            eq(messageStatuses.userId, userId),
+                            eq(messageStatuses.status, "delivered")
+                        )
+                    );
+
+                // Nothing to mark as read
+                if (deliveredMessages.length === 0) {
+                    return;
+                }
+
+                // Mark each message as read
+                for (const item of deliveredMessages) {
+                    await db
+                        .update(messageStatuses)
+                        .set({
+                            status: "read",
+                            updatedAt: new Date(),
+                        })
+                        .where(eq(messageStatuses.id, item.statusId));
+
+                    // Increase seenCount
+                    await db
+                        .update(messages)
+                        .set({
+                            seenCount: sql`${messages.seenCount} + 1`,
+                        })
+                        .where(eq(messages.id, item.messageId));
+                }
+
+                console.log(
+                    `Marked ${deliveredMessages.length} messages as read for user ${userId}`
+                );
+            } catch (error) {
+                console.error("Chat opened error:", error);
+            }
+        });
+
         socket.on("typing", ({ chatId }) => {
             const room = `chat:${chatId}`;
 
-            console.log("Typing event received:", {
-                userId,
-                chatId,
-                socketId: socket.id,
-                recipients: Math.max((io.sockets.adapter.rooms.get(room)?.size ?? 0) - 1, 0),
-            });
+
 
             socket.to(room).emit("typing", {
                 userId: socket.user.id,
                 chatId,
             });
         });
+
+
 
         socket.on("stop-typing", ({ chatId }) => {
             const room = `chat:${chatId}`;
