@@ -6,6 +6,10 @@ import { eq, and, asc, desc, getTableColumns, isNull, lte, gte, ne } from "drizz
 import { users } from "../model/users";
 import { messageStatuses } from "../model/messagestatus";
 import { chats } from "../model/chats";
+import {
+  aggregateMessageStatus,
+  initialRecipientStatus,
+} from "../utils/messageStatus";
 
 
 
@@ -74,6 +78,23 @@ export const createMessage = async (
         )
       );
 
+    const io = req.app.get("io");
+    const recipientStatuses = await Promise.all(
+      recipients.map(async (recipient) => {
+        const sockets = await io
+          .in(`user:${recipient.userId}`)
+          .fetchSockets();
+
+        return {
+          userId: recipient.userId,
+          status: initialRecipientStatus(sockets.length > 0),
+        };
+      })
+    );
+    const deliveredCount = recipientStatuses.filter(
+      (recipient) => recipient.status === "delivered"
+    ).length;
+
     // Create message and statuses in a transaction
     const newMessage = await db.transaction(async (tx) => {
       // Create message
@@ -85,17 +106,18 @@ export const createMessage = async (
           type,
           message,
           caption: caption || null,
-          totalRecipients: chat.totalMembers - 1,
-                })
+          totalRecipients: recipients.length,
+          deliveredCount,
+        })
         .returning();
 
       // Create initial status records for recipients
-      if (recipients.length > 0) {
+      if (recipientStatuses.length > 0) {
         await tx.insert(messageStatuses).values(
-          recipients.map((recipient) => ({
+          recipientStatuses.map((recipient) => ({
             messageId: createdMessage.id,
             userId: recipient.userId,
-            status: "sent" as const,
+            status: recipient.status,
           }))
         );
       }
@@ -103,14 +125,30 @@ export const createMessage = async (
       return createdMessage;
     });
 
-    const io = req.app.get("io");
-
-    io.to(`chat:${chatId}`).emit("new:message", newMessage);
+    const status = aggregateMessageStatus(
+      deliveredCount,
+      0,
+      recipientStatuses.length
+    );
+    io.to(`chat:${chatId}`).emit("new:message", {
+      ...newMessage,
+      status,
+    });
+    io.to(`user:${senderId}`)
+      .to(`chat:${chatId}`)
+      .emit("message:status", {
+        messageId: newMessage.id,
+        senderId,
+        status,
+      });
 
     return res.status(201).json({
       success: true,
       message: "Message sent successfully",
-      data: newMessage,
+      data: {
+        ...newMessage,
+        status,
+      },
     });
   } catch (error) {
     console.error("Create message error:", error);
@@ -221,7 +259,7 @@ export const getMessages = async (
       });
     }
 
-    // Get user's membership history
+  
     const [member] = await db
       .select({
         joinedAt: chatMembers.joinedAt,
@@ -254,8 +292,7 @@ export const getMessages = async (
         lte(messages.createdAt, member.leftAt)
       );
     } else {
-      // User is currently an active member.
-      // Show messages from when they joined until now.
+      
       messageCondition = and(
         eq(messages.chatId, chatId),
         gte(messages.createdAt, member.joinedAt)
@@ -276,11 +313,10 @@ export const getMessages = async (
       .where(messageCondition)
       .orderBy(asc(messages.createdAt));
 
-    // Calculate status for messages sent by the current user
+   
     const messagesWithStatus = await Promise.all(
       chatMessages.map(async (message) => {
-        // Messages received from other users don't need
-        // an outgoing status
+       
         if (message.senderId !== userId) {
           return {
             ...message,
@@ -288,7 +324,7 @@ export const getMessages = async (
           };
         }
 
-        // Private chat / group chat status
+      
         if (message.totalRecipients === 0) {
           return {
             ...message,
@@ -296,7 +332,7 @@ export const getMessages = async (
           };
         }
 
-        // Get current status counts
+     
         if (
           message.seenCount ===
           message.totalRecipients
@@ -307,7 +343,7 @@ export const getMessages = async (
           };
         }
 
-        else if (message.deliveredCount =message.totalRecipients) {
+        else if (message.deliveredCount === message.totalRecipients) {
           return {
             ...message,
             status: "delivered",
