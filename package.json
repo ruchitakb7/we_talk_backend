@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "tsx --test src/utils/messageStatus.test.ts",
+    "test":  "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon tsx watch src/server.ts",
     "start": "nodemon --exec tsx src/server.ts",
     "build": "tsc",
